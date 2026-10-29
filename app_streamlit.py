@@ -1,29 +1,66 @@
 import streamlit as st
 import pickle
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 
-# एआई मॉडल एसेट्स को लोड करें
-with open('tfidf_vectorizer.pkl', 'rb') as f:
-    vectorizer = pickle.load(f)
-with open('sentiment_ml_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="ReviewPulse - AI Sentiment Analyzer", page_icon="📊", layout="centered")
 
-# वेब पेज की सजावट
-st.title("✨ ReviewPulse: AI Sentiment Analyzer")
-st.write("Type any product review below to test the live Machine Learning model.")
+# --- DOWNLOAD NLP ASSETS QUIETLY ---
+@st.cache_resource
+def load_nlp_assets():
+    nltk.download('stopwords', quiet=True)
+    nltk.download('wordnet', quiet=True)
+    nltk.download('omw-1.4', quiet=True)
+    return set(stopwords.words('english')), WordNetLemmatizer()
 
-# यूजर से इनपुट लेने के लिए बॉक्स
-user_review = st.text_area("Enter Customer Review Text:", "This phone has an amazing camera and fast charging!")
+stop_words, lemmatizer = load_nlp_assets()
 
-if st.button("Analyze Sentiment"):
-    if user_review.strip() != "":
-        # एआई प्रेडिक्शन रन करें
-        vectorized_text = vectorizer.transform([user_review])
-        prediction = model.predict(vectorized_text)
-        
-        # रिजल्ट दिखाएं
-        if prediction == 1:
-            st.success("✨ Positive Sentiment (Happy Customer)")
-        else:
-            st.error("🚨 Negative Sentiment (Disappointed Customer)")
+# --- LOAD AI MODELS ---
+@st.cache_resource
+def load_ml_model():
+    with open('tfidf_vectorizer.pkl', 'rb') as f:
+        vectorizer = pickle.load(f)
+    with open('sentiment_ml_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+    return vectorizer, model
+
+try:
+    vectorizer, model = load_ml_model()
+except FileNotFoundError:
+    st.error("🚨 Model files missing! Please ensure 'tfidf_vectorizer.pkl' and 'sentiment_ml_model.pkl' are in the same folder.")
+
+# --- TEXT CLEANING FUNCTION ---
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r'<.*?>|https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    words = text.split()
+    cleaned_words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
+    return ' '.join(cleaned_words)
+
+# --- USER INTERFACE (UI) ---
+st.title("📊 ReviewPulse: AI Sentiment Analyzer")
+st.write("Evaluate customer feedback instantly using our advanced 3-Class Sentiment Engine.")
+
+user_input = st.text_area("✍️ Enter Customer Review Text Here:", placeholder="Type a review (e.g., The phone is great but delivery was late...)")
+
+if st.button("Analyze Sentiment", type="primary"):
+    if user_input.strip() == "":
+        st.warning("⚠️ Please enter some text before analyzing.")
     else:
-        st.warning("Please enter some text to analyze.")
+        # Preprocess and predict
+        cleaned_review = clean_text(user_input)
+        vectorized_text = vectorizer.transform([cleaned_review])
+        prediction = model.predict(vectorized_text)[0]
+        
+        # 3-Class Sentiment Formatting
+        st.subheader("🔮 Analysis Result:")
+        if prediction == 2:
+            st.success("😊 **Positive Sentiment** — This is a **Happy Customer**!")
+        elif prediction == 1:
+            st.info("😐 **Neutral Sentiment** — The feedback is **Satisfied or Factual**.")
+        else:
+            st.error("😭 **Negative Sentiment** — This is an **Unhappy Customer**!")
