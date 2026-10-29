@@ -58,7 +58,12 @@ if st.button("Analyze Sentiment", type="primary"):
         
         # 3-Class Sentiment Formatting
         st.subheader("🔮 Analysis Result:")
-        if prediction == 2:
+        
+        # Checking if explicitly positive keywords exist to assist the model
+        positive_boosters = ['amazing', 'perfect', 'love', 'best', 'great', 'excellent', 'stunning']
+        has_positive_word = any(word in cleaned_review for word in positive_boosters)
+        
+        if prediction == 2 or (prediction == 1 and has_positive_word):
             st.success("😊 **Positive Sentiment** — This is a **Happy Customer**!")
         elif prediction == 1:
             st.info("😐 **Neutral Sentiment** — The feedback is **Satisfied or Factual**.")
